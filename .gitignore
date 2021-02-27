@@ -1,0 +1,10 @@
+# Editor configuration
+.vscode/
+
+# Build artifacts
+build/
+fat32
+log.txt
+
+# Test filesystem
+test/
