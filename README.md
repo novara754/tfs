@@ -60,6 +60,10 @@ there is a maximum 64 entries per directory.
 
 Each entry in a directory can either be a file or another directory.
 
+Every directory's first two entries are a loopback entry (name ".") pointing
+to the directory itself and a parent entry (name "..") pointing to its parent.
+The root directory has no parent entry because it has no parent.
+
 ### Files
 
 Files are consecutive blocks containing nothing but their raw data.
@@ -87,9 +91,10 @@ Directory entries are 16-byte structures laid out as follows:
 
 **Name:**
 The name of the file or directory stored in 7-bit ASCII encoding.
-Allowed is everything from 0x20 to 0x7D except for 0x2F (`"/"`).  
+Allowed is everything from `0x20` to `0x7D` except for `0x2F` (`"/"`).  
 The MSB of the first byte signifies whether the entry is for a file (0)
 or another directory (1).
+Unused bytes in the filename are to be set to `0x00`.
 
 **Start block:**
 Index of the first data block of the file or directory. Keep in mind that
