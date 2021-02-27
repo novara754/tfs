@@ -1,5 +1,4 @@
 #include "tfs.h"
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse.h>
@@ -14,6 +13,11 @@
 static int source_fd;
 static FILE *log;
 
+auto get_instance() -> tfs::tfs_instance {
+  return *reinterpret_cast<tfs::tfs_instance *>(
+      fuse_get_context()->private_data);
+}
+
 void read_at(int fd, off_t off, void *buf, size_t len) {
   lseek(fd, off, 0);
   read(fd, buf, len);
@@ -23,7 +27,7 @@ void *tfs_fuse_init(struct fuse_conn_info *conn, struct fuse_config *conf) {
   UNUSED(conn);
   UNUSED(conf);
 
-  tfs_instance *tfs = malloc(sizeof(*tfs));
+  auto tfs = new tfs::tfs_instance{};
 
   uint8_t buf[1];
   read_at(source_fd, 509, &buf, 1);
@@ -33,30 +37,22 @@ void *tfs_fuse_init(struct fuse_conn_info *conn, struct fuse_config *conf) {
 }
 
 void tfs_fuse_destroy(void *private_data) {
-  free(private_data);
+  auto tfs = reinterpret_cast<tfs::tfs_instance *>(private_data);
+  delete tfs;
   close(source_fd);
+  fclose(log);
 }
 
 int tfs_fuse_getattr(const char *path, struct stat *st,
                      struct fuse_file_info *fi) {
-  // if (strcmp(path, "/") == 0) {
-  //   st->st_mode = __S_IFDIR | 0755;
-  //   return 0;
-  // }
-
-  // if (strcmp(path, "/hello.txt") == 0) {
-  //   st->st_mode = __S_IFREG | 0444;
-  //   return 0;
-  // }
-
   UNUSED(fi);
 
   fprintf(log, "now looking for path=%s\n", path);
 
-  tfs_instance *instance = (tfs_instance *)fuse_get_context()->private_data;
+  auto instance = get_instance();
 
-  const char *next_slash = strchr(path + 1, '/');
-  size_t disk_offset = tfs_get_data_block_offset(instance, 0);
+  auto next_slash = strchr(path + 1, '/');
+  auto disk_offset = tfs::get_data_block_offset(instance, 0);
 
   while (next_slash != NULL) {
     const char *segment = path + 1;
@@ -67,24 +63,27 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
       segment_len = next_slash - path - 1;
     }
 
-    uint8_t buf[BLOCK_SIZE];
-    read_at(source_fd, disk_offset, buf, BLOCK_SIZE);
+    fprintf(log, "segment=%.*s\n", (int)segment_len, segment);
 
-    tfs_dir_ent *entry = tfs_find_dir_ent(segment, segment_len, buf);
-    if (entry == NULL) {
+    tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
+    read_at(source_fd, disk_offset, buf, tfs::BLOCK_SIZE);
+
+    auto entry = tfs::find_dir_ent({segment, segment_len}, std::begin(buf),
+                                   std::end(buf));
+    if (entry == nullptr) {
       return -ENOTDIR;
     }
 
-    if (next_slash != NULL && !entry->is_dir) {
+    if (next_slash != NULL && !entry->is_dir()) {
       return -ENOENT;
     }
 
-    disk_offset = tfs_get_data_block_offset(instance, entry->start_block);
+    disk_offset = tfs::get_data_block_offset(instance, entry->data.start_block);
     path = next_slash;
     next_slash = strchr(segment, '/');
   }
 
-  // `disk_offset` is not set to the location of the parent directory
+  // `disk_offset` is now set to the location of the parent directory
   // for the requested file.
   // `path` now points to the file's basename.
   const char *filename = path + 1;
@@ -94,15 +93,16 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
 
   fprintf(log, "filename=%s, disk_offset=%ld\n", filename, disk_offset);
 
-  uint8_t buf[BLOCK_SIZE];
-  read_at(source_fd, disk_offset, buf, BLOCK_SIZE);
-  tfs_dir_ent *entry = tfs_find_dir_ent(filename, strlen(filename), buf);
-  if (entry == NULL) {
+  tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
+  read_at(source_fd, disk_offset, buf, tfs::BLOCK_SIZE);
+
+  auto entry = tfs::find_dir_ent(filename, std::begin(buf), std::end(buf));
+  if (entry == nullptr) {
     return -ENOENT;
   }
 
-  fprintf(log, "entry->is_dir=%d\n", entry->is_dir);
-  st->st_mode = entry->is_dir ? __S_IFDIR : __S_IFREG;
+  fprintf(log, "entry->is_dir=%d\n", entry->is_dir());
+  st->st_mode = entry->is_dir() ? __S_IFDIR : __S_IFREG;
 
   fprintf(log, "now returning 0 from getattr\n");
 
@@ -116,26 +116,27 @@ int tfs_fuse_readdir(const char *path, void *dir_buf, fuse_fill_dir_t filler,
   UNUSED(fi);
   UNUSED(flags);
 
-  tfs_instance *instance = (tfs_instance *)fuse_get_context()->private_data;
+  auto instance = get_instance();
 
   if (strcmp(path, "/") == 0) {
-    uint8_t buf[BLOCK_SIZE];
-    read_at(source_fd, tfs_get_data_block_offset(instance, 0), buf, BLOCK_SIZE);
+    uint8_t buf[tfs::BLOCK_SIZE];
+    read_at(source_fd, tfs::get_data_block_offset(instance, 0), buf,
+            tfs::BLOCK_SIZE);
 
-    filler(dir_buf, "..", NULL, 0, 0);
+    filler(dir_buf, "..", NULL, 0, static_cast<fuse_fill_dir_flags>(0));
 
-    for (size_t i = 0; i < BLOCK_SIZE; i += sizeof(tfs_dir_ent)) {
-      tfs_dir_ent *entry = (tfs_dir_ent *)&buf[i];
-      tfs_dir_ent_type type = tfs_get_dir_ent_type(entry);
-      if (type == DIR_ENT_END) {
+    for (size_t i = 0; i < tfs::BLOCK_SIZE; i += sizeof(tfs::dir_ent)) {
+      auto entry = (tfs::dir_ent *)&buf[i];
+      auto type = entry->get_type();
+      if (type == tfs::dir_ent::type::END) {
         break;
       }
-      if (type == DIR_ENT_EMPTY) {
+      if (type == tfs::dir_ent::type::EMPTY) {
         continue;
       }
 
-      entry->name[0] &= 0x7F;
-      filler(dir_buf, (char *)entry->name, NULL, 0, 0);
+      filler(dir_buf, entry->clean_name().c_str(), NULL, 0,
+             static_cast<fuse_fill_dir_flags>(0));
     }
 
     return 0;
@@ -170,22 +171,11 @@ int tfs_fuse_write(const char *path, const char *buf, size_t size, off_t off,
   return -ENOENT;
 }
 
-static const struct fuse_operations tfs_fuse_oper = {
-    .init = tfs_fuse_init,
-    .destroy = tfs_fuse_destroy,
-    .getattr = tfs_fuse_getattr,
-    .readdir = tfs_fuse_readdir,
-    .open = tfs_fuse_open,
-    .read = tfs_fuse_read,
-    .write = tfs_fuse_write,
-};
-
 int main(int argc, char **argv) {
   if (argc != 3) {
     fprintf(stderr, "tfs: usage: %s <tfs> <mount-dir>\n", argv[0]);
     return 1;
   }
-
 
   char *source_path = realpath(argv[1], NULL);
   source_fd = open(source_path, O_RDWR);
@@ -197,6 +187,16 @@ int main(int argc, char **argv) {
   argc--;
 
   log = fopen("./log.txt", "a");
+
+  static struct fuse_operations tfs_fuse_oper;
+  tfs_fuse_oper.init = tfs_fuse_init;
+  tfs_fuse_oper.destroy = tfs_fuse_destroy;
+  tfs_fuse_oper.getattr = tfs_fuse_getattr;
+  tfs_fuse_oper.readdir = tfs_fuse_readdir;
+  tfs_fuse_oper.open = tfs_fuse_open;
+  tfs_fuse_oper.read = tfs_fuse_read;
+  tfs_fuse_oper.write = tfs_fuse_write;
+
   int ret = fuse_main(argc, argv + 1, &tfs_fuse_oper, NULL);
 
   return ret;

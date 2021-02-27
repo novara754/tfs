@@ -1,9 +1,9 @@
 TARGET = tfs
-SRCS = main.c tfs.c
-OBJS = $(patsubst %.c,build/%.o,$(SRCS))
+SRCS = main.cpp tfs.cpp
+OBJS = $(patsubst %.cpp,build/%.o,$(SRCS))
 
-CC = gcc
-CFLAGS = --std=c17 -Wall -Wextra -Wpedantic -Werror \
+CXX = g++
+CXXFLAGS = --std=c++17 -Wall -Wextra -Wpedantic -Werror \
 	-D_GNU_SOURCE \
 	-DFUSE_USE_VERSION=31 \
 	$(shell pkg-config fuse3 --cflags)
@@ -26,13 +26,13 @@ test: $(TARGET)
 	@if [ ! -e /tmp/tfs-mount ]; then \
 		mkdir -p /tmp/tfs-mount ; \
 	fi
-	./$(TARGET) ./test/test.img /tmp/tfs-mount
-	ls /tmp/tfs-mount
-	sudo fusermount3 -u /tmp/tfs-mount
+	@./$(TARGET) ./test/test.img /tmp/tfs-mount
+	ls -lha /tmp/tfs-mount
+	@sudo fusermount3 -u /tmp/tfs-mount
 
 $(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-build/%.o: src/%.c
+build/%.o: src/%.cpp
 	@mkdir -p build/
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
