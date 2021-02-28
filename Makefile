@@ -1,5 +1,5 @@
 TARGET = tfs
-SRCS = main.cpp tfs.cpp
+SRCS = main.cpp tfs.cpp util.cpp
 OBJS = $(patsubst %.cpp,build/%.o,$(SRCS))
 
 CXX = g++

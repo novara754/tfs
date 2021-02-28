@@ -1,4 +1,5 @@
 #include "tfs.h"
+#include "util.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse.h>
@@ -11,7 +12,6 @@
 #define UNUSED(x) ((void)(x))
 
 static int source_fd;
-static FILE *log;
 
 auto get_instance() -> tfs::tfs_instance {
   return *reinterpret_cast<tfs::tfs_instance *>(
@@ -29,7 +29,7 @@ void *tfs_fuse_init(struct fuse_conn_info *conn, struct fuse_config *conf) {
 
   auto tfs = new tfs::tfs_instance{};
 
-  uint8_t buf[1];
+  std::uint8_t buf[1];
   read_at(source_fd, 509, &buf, 1);
   tfs->reserved_blocks = buf[0];
 
@@ -40,58 +40,41 @@ void tfs_fuse_destroy(void *private_data) {
   auto tfs = reinterpret_cast<tfs::tfs_instance *>(private_data);
   delete tfs;
   close(source_fd);
-  fclose(log);
 }
 
 int tfs_fuse_getattr(const char *path, struct stat *st,
                      struct fuse_file_info *fi) {
   UNUSED(fi);
 
-  fprintf(log, "now looking for path=%s\n", path);
-
   auto instance = get_instance();
 
-  auto next_slash = strchr(path + 1, '/');
   auto disk_offset = tfs::get_data_block_offset(instance, 0);
-
-  while (next_slash != NULL) {
-    const char *segment = path + 1;
-    size_t segment_len;
-    if (next_slash == NULL) {
-      segment_len = strlen(segment);
-    } else {
-      segment_len = next_slash - path - 1;
-    }
-
-    fprintf(log, "segment=%.*s\n", (int)segment_len, segment);
+  auto segments = util::split_by(path, '/');
+  for (std::size_t i = 0; i < segments.size() - 1; i++) {
+    const auto &segment = segments[i];
 
     tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
     read_at(source_fd, disk_offset, buf, tfs::BLOCK_SIZE);
 
-    auto entry = tfs::find_dir_ent({segment, segment_len}, std::begin(buf),
-                                   std::end(buf));
+    auto entry = tfs::find_dir_ent(segment, std::begin(buf), std::end(buf));
     if (entry == nullptr) {
       return -ENOTDIR;
     }
 
-    if (next_slash != NULL && !entry->is_dir()) {
+    if (i != (segments.size() - 2) && !entry->is_dir()) {
       return -ENOENT;
     }
 
     disk_offset = tfs::get_data_block_offset(instance, entry->data.start_block);
-    path = next_slash;
-    next_slash = strchr(segment, '/');
   }
 
   // `disk_offset` is now set to the location of the parent directory
   // for the requested file.
   // `path` now points to the file's basename.
-  const char *filename = path + 1;
-  if (filename[0] == 0) {
+  auto filename = segments.back();
+  if (filename.size() == 0) {
     filename = ".";
   }
-
-  fprintf(log, "filename=%s, disk_offset=%ld\n", filename, disk_offset);
 
   tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
   read_at(source_fd, disk_offset, buf, tfs::BLOCK_SIZE);
@@ -101,10 +84,7 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
     return -ENOENT;
   }
 
-  fprintf(log, "entry->is_dir=%d\n", entry->is_dir());
   st->st_mode = entry->is_dir() ? __S_IFDIR : __S_IFREG;
-
-  fprintf(log, "now returning 0 from getattr\n");
 
   return 0;
 }
@@ -119,7 +99,7 @@ int tfs_fuse_readdir(const char *path, void *dir_buf, fuse_fill_dir_t filler,
   auto instance = get_instance();
 
   if (strcmp(path, "/") == 0) {
-    uint8_t buf[tfs::BLOCK_SIZE];
+    std::uint8_t buf[tfs::BLOCK_SIZE];
     read_at(source_fd, tfs::get_data_block_offset(instance, 0), buf,
             tfs::BLOCK_SIZE);
 
@@ -185,8 +165,6 @@ int main(int argc, char **argv) {
 
   argv[1] = argv[0];
   argc--;
-
-  log = fopen("./log.txt", "a");
 
   static struct fuse_operations tfs_fuse_oper;
   tfs_fuse_oper.init = tfs_fuse_init;
