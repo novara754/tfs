@@ -65,12 +65,12 @@ def main():
         ### Root directory ###
         f.seek(get_block_offset(3))
         f.write(make_dir_entry(DIR, '.', 0, 0, 0))
-        f.write(make_dir_entry(FILE, 'hello.txt', 1, 1, 13))
+        f.write(make_dir_entry(FILE, 'hello.txt', 1, 1, 14))
         ### -------------- ###
 
         ### First data block ###
         f.seek(get_data_block_offset(0))
-        f.write(bytes('Hello, World!', 'ascii'))
+        f.write(bytes('Hello, World!\n', 'ascii'))
         ### ---------------- ###
 
         ### Fill rest of file ###
