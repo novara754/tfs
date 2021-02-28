@@ -85,4 +85,8 @@ auto dir_ent::get_type() const -> dir_ent::type {
   return dir_ent::type::USED;
 }
 
+auto dir_ent::total_size() const -> std::size_t {
+  return (this->data.num_blocks - 1) * BLOCK_SIZE + this->data.size;
+}
+
 } // namespace tfs

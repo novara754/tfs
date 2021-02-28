@@ -48,7 +48,12 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
     return -ENOENT;
   }
 
-  st->st_mode = entry->is_dir() ? __S_IFDIR : __S_IFREG;
+  if (entry->is_dir()) {
+    st->st_mode = __S_IFDIR;
+  } else {
+    st->st_mode = __S_IFREG;
+    st->st_size = entry->total_size();
+  }
 
   return 0;
 }

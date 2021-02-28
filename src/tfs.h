@@ -88,6 +88,13 @@ struct __attribute__((packed)) dir_ent {
    * directory.
    */
   auto get_type() const -> type;
+
+  /**
+   * Calculate total size of file belonging to entry.
+   *
+   * Returns 0 if file is directory.
+   */
+  auto total_size() const -> std::size_t;
 };
 
 /**
