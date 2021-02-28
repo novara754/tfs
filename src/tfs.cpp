@@ -49,6 +49,31 @@ auto tfs_instance::get_dir_ent_for_path(std::string_view path)
   return find_dir_ent(filename, std::begin(buf), std::end(buf));
 }
 
+auto tfs_instance::read_dir(std::string_view path)
+    -> std::optional<std::vector<dir_ent>> {
+  auto dir = this->get_dir_ent_for_path(path);
+  if (!dir.has_value()) {
+    return {};
+  }
+
+  tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
+  this->read_at(this->get_data_block_offset(dir->data.start_block), buf,
+                tfs::BLOCK_SIZE);
+
+  std::vector<dir_ent> entries;
+  for (const auto &entry : buf) {
+    if (entry.get_type() == dir_ent::type::END) {
+      break;
+    }
+    if (entry.get_type() == dir_ent::type::EMPTY) {
+      continue;
+    }
+    entries.push_back(entry);
+  }
+
+  return entries;
+}
+
 auto dir_ent::clean_name() const -> std::string {
   std::string clean = reinterpret_cast<const char *>(this->data.name);
   clean[0] &= 0x7F;

@@ -44,6 +44,13 @@ public:
    * Get a `dir_ent` corresponding to the given absolute path.
    */
   auto get_dir_ent_for_path(std::string_view path) -> std::optional<dir_ent>;
+
+  /**
+   * Get list of directory entries for a directory.
+   *
+   * Returns empty optional if directory does not exist.
+   */
+  auto read_dir(std::string_view path) -> std::optional<std::vector<dir_ent>>;
 };
 
 struct __attribute__((packed)) dir_ent {

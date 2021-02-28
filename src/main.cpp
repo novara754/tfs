@@ -9,6 +9,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <iostream>
+
 #define UNUSED(x) ((void)(x))
 
 static int source_fd;
@@ -25,7 +27,7 @@ auto read_at(int fd, off_t off, void *buf, size_t len) {
 
 void *tfs_fuse_init(struct fuse_conn_info *conn, struct fuse_config *conf) {
   UNUSED(conn);
-  UNUSED(conf);
+  conf->kernel_cache = 1;
   return new tfs::tfs_instance{[](off_t off, void *buf, size_t len) {
     lseek(source_fd, off, 0);
     read(source_fd, buf, len);
@@ -48,6 +50,7 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
     return -ENOENT;
   }
 
+  st->st_nlink = 1;
   if (entry->is_dir()) {
     st->st_mode = __S_IFDIR;
   } else {
@@ -67,30 +70,23 @@ int tfs_fuse_readdir(const char *path, void *dir_buf, fuse_fill_dir_t filler,
 
   auto instance = get_instance();
 
-  if (strcmp(path, "/") == 0) {
-    std::uint8_t buf[tfs::BLOCK_SIZE];
-    read_at(source_fd, instance.get_data_block_offset(0), buf, tfs::BLOCK_SIZE);
-
-    filler(dir_buf, "..", NULL, 0, static_cast<fuse_fill_dir_flags>(0));
-
-    for (size_t i = 0; i < tfs::BLOCK_SIZE; i += sizeof(tfs::dir_ent)) {
-      auto entry = (tfs::dir_ent *)&buf[i];
-      auto type = entry->get_type();
-      if (type == tfs::dir_ent::type::END) {
-        break;
-      }
-      if (type == tfs::dir_ent::type::EMPTY) {
-        continue;
-      }
-
-      filler(dir_buf, entry->clean_name().c_str(), NULL, 0,
-             static_cast<fuse_fill_dir_flags>(0));
-    }
-
-    return 0;
+  auto entries = instance.read_dir(path);
+  if (!entries.has_value()) {
+    return -ENOTDIR;
   }
 
-  return -ENOENT;
+  // Normally the root directory does not have a parent entry,
+  // but for the FUSE it's needed so it's added manually.
+  if (path == std::string("/")) {
+    filler(dir_buf, "..", NULL, 0, static_cast<fuse_fill_dir_flags>(0));
+  }
+
+  for (const auto &entry : entries.value()) {
+    filler(dir_buf, entry.clean_name().c_str(), NULL, 0,
+           static_cast<fuse_fill_dir_flags>(0));
+  }
+
+  return 0;
 }
 
 int tfs_fuse_open(const char *path, struct fuse_file_info *fi) {
