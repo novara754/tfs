@@ -120,8 +120,8 @@ int tfs_fuse_write(const char *path, const char *buf, size_t size, off_t off,
 }
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
-    fprintf(stderr, "tfs: usage: %s <tfs> <mount-dir>\n", argv[0]);
+  if (argc < 3) {
+    fprintf(stderr, "tfs: usage: %s <tfs> <mount-dir> [options]\n", argv[0]);
     return 1;
   }
 

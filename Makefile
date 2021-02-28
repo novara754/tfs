@@ -27,9 +27,7 @@ test: $(TARGET)
 	@if [ ! -e /tmp/tfs-mount ]; then \
 		mkdir -p /tmp/tfs-mount ; \
 	fi
-	@./$(TARGET) ./test/test.img /tmp/tfs-mount
-	ls -lha /tmp/tfs-mount
-	@sudo fusermount3 -u /tmp/tfs-mount
+	./$(TARGET) ./test/test.img /tmp/tfs-mount -f -d
 
 $(TARGET): $(OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
