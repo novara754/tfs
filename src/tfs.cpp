@@ -1,4 +1,5 @@
 #include "tfs.h"
+#include "util.h"
 #include <string.h>
 
 namespace tfs {
@@ -10,6 +11,42 @@ auto tfs_instance::get_block_offset(std::size_t idx) -> std::size_t {
 auto tfs_instance::get_data_block_offset(std::size_t idx) -> std::size_t {
   return (this->reserved_blocks + 1) * BLOCK_SIZE + BLOCK_USAGE_BITMAP_SIZE +
          idx * BLOCK_SIZE;
+}
+
+auto tfs_instance::get_dir_ent_for_path(std::string_view path)
+    -> std::optional<dir_ent> {
+  auto disk_offset = this->get_data_block_offset(0);
+  auto segments = util::split_by(path, '/');
+  for (std::size_t i = 0; i < segments.size() - 1; i++) {
+    const auto &segment = segments[i];
+
+    tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
+    this->read_at(disk_offset, buf, tfs::BLOCK_SIZE);
+
+    auto entry = tfs::find_dir_ent(segment, std::begin(buf), std::end(buf));
+    if (!entry.has_value()) {
+      return {};
+    }
+
+    if (i != (segments.size() - 2) && !entry->is_dir()) {
+      return {};
+    }
+
+    disk_offset = this->get_data_block_offset(entry->data.start_block);
+  }
+
+  // `disk_offset` is now set to the location of the parent directory
+  // for the requested file.
+
+  auto filename = segments.back();
+  if (filename.size() == 0) {
+    filename = ".";
+  }
+
+  tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
+  this->read_at(disk_offset, buf, tfs::BLOCK_SIZE);
+
+  return find_dir_ent(filename, std::begin(buf), std::end(buf));
 }
 
 auto dir_ent::clean_name() const -> std::string {

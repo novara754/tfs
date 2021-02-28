@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -12,8 +14,19 @@ namespace tfs {
 constexpr std::size_t BLOCK_SIZE = 1024;
 constexpr std::size_t BLOCK_USAGE_BITMAP_SIZE = BLOCK_SIZE * 2;
 
-struct tfs_instance {
+struct dir_ent;
+
+class tfs_instance {
+private:
   std::uint8_t reserved_blocks;
+  std::function<void(off_t off, void *buf, size_t len)> read_at;
+
+public:
+  tfs_instance(auto read_at) : read_at(read_at) {
+    std::uint8_t buf[1];
+    this->read_at(509, &buf, 1);
+    this->reserved_blocks = buf[0];
+  }
 
   /**
    * Calculate the byte offset for a given block index.
@@ -26,6 +39,11 @@ struct tfs_instance {
    * at the start.
    */
   auto get_data_block_offset(std::size_t idx) -> std::size_t;
+
+  /**
+   * Get a `dir_ent` corresponding to the given absolute path.
+   */
+  auto get_dir_ent_for_path(std::string_view path) -> std::optional<dir_ent>;
 };
 
 struct __attribute__((packed)) dir_ent {
@@ -78,7 +96,8 @@ struct __attribute__((packed)) dir_ent {
  * Return NULL if entry not found.
  */
 template<typename Iter>
-dir_ent *find_dir_ent(std::string_view name, Iter start, Iter end) {
+std::optional<dir_ent> find_dir_ent(std::string_view name, Iter start,
+                                    Iter end) {
   auto res = std::find_if(start, end, [&name](auto entry) {
     auto type = entry.get_type();
     if (type != dir_ent::type::USED) {
@@ -88,7 +107,7 @@ dir_ent *find_dir_ent(std::string_view name, Iter start, Iter end) {
     return entry.clean_name() == name;
   });
 
-  return res != end ? &*res : nullptr;
+  return res != end ? *res : std::optional<dir_ent>{};
 }
 
 } // namespace tfs

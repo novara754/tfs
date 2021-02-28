@@ -18,7 +18,7 @@ auto get_instance() -> tfs::tfs_instance {
       fuse_get_context()->private_data);
 }
 
-void read_at(int fd, off_t off, void *buf, size_t len) {
+auto read_at(int fd, off_t off, void *buf, size_t len) {
   lseek(fd, off, 0);
   read(fd, buf, len);
 }
@@ -26,14 +26,10 @@ void read_at(int fd, off_t off, void *buf, size_t len) {
 void *tfs_fuse_init(struct fuse_conn_info *conn, struct fuse_config *conf) {
   UNUSED(conn);
   UNUSED(conf);
-
-  auto tfs = new tfs::tfs_instance{};
-
-  std::uint8_t buf[1];
-  read_at(source_fd, 509, &buf, 1);
-  tfs->reserved_blocks = buf[0];
-
-  return tfs;
+  return new tfs::tfs_instance{[](off_t off, void *buf, size_t len) {
+    lseek(source_fd, off, 0);
+    read(source_fd, buf, len);
+  }};
 }
 
 void tfs_fuse_destroy(void *private_data) {
@@ -47,40 +43,8 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
   UNUSED(fi);
 
   auto instance = get_instance();
-
-  auto disk_offset = instance.get_data_block_offset(0);
-  auto segments = util::split_by(path, '/');
-  for (std::size_t i = 0; i < segments.size() - 1; i++) {
-    const auto &segment = segments[i];
-
-    tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
-    read_at(source_fd, disk_offset, buf, tfs::BLOCK_SIZE);
-
-    auto entry = tfs::find_dir_ent(segment, std::begin(buf), std::end(buf));
-    if (entry == nullptr) {
-      return -ENOTDIR;
-    }
-
-    if (i != (segments.size() - 2) && !entry->is_dir()) {
-      return -ENOENT;
-    }
-
-    disk_offset = instance.get_data_block_offset(entry->data.start_block);
-  }
-
-  // `disk_offset` is now set to the location of the parent directory
-  // for the requested file.
-  // `path` now points to the file's basename.
-  auto filename = segments.back();
-  if (filename.size() == 0) {
-    filename = ".";
-  }
-
-  tfs::dir_ent buf[tfs::BLOCK_SIZE / sizeof(tfs::dir_ent)];
-  read_at(source_fd, disk_offset, buf, tfs::BLOCK_SIZE);
-
-  auto entry = tfs::find_dir_ent(filename, std::begin(buf), std::end(buf));
-  if (entry == nullptr) {
+  auto entry = instance.get_dir_ent_for_path(path);
+  if (!entry.has_value()) {
     return -ENOENT;
   }
 

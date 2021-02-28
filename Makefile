@@ -3,7 +3,8 @@ SRCS = main.cpp tfs.cpp util.cpp
 OBJS = $(patsubst %.cpp,build/%.o,$(SRCS))
 
 CXX = g++
-CXXFLAGS = --std=c++17 -Wall -Wextra -Wpedantic -Werror \
+CXXFLAGS = --std=c++2a -Wall -Wextra -Wpedantic -Werror \
+	-fconcepts \
 	-D_GNU_SOURCE \
 	-DFUSE_USE_VERSION=31 \
 	$(shell pkg-config fuse3 --cflags)
