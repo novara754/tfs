@@ -1,6 +1,5 @@
 #include "tfs.h"
 #include "util.h"
-#include <string.h>
 
 namespace tfs {
 
@@ -72,6 +71,21 @@ auto tfs_instance::read_dir(std::string_view path)
   }
 
   return entries;
+}
+
+auto tfs_instance::read_file(std::string_view path)
+    -> std::optional<std::vector<std::uint8_t>> {
+  auto file = this->get_dir_ent_for_path(path);
+  if (!file.has_value()) {
+    return {};
+  }
+
+  std::vector<std::uint8_t> data;
+  data.resize(file->total_size());
+  this->read_at(this->get_data_block_offset(file->data.start_block),
+                data.data(), file->total_size());
+
+  return data;
 }
 
 auto dir_ent::clean_name() const -> std::string {

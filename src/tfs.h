@@ -51,6 +51,14 @@ public:
    * Returns empty optional if directory does not exist.
    */
   auto read_dir(std::string_view path) -> std::optional<std::vector<dir_ent>>;
+
+  /**
+   * Read contents of a file.
+   *
+   * Returns empty optional if file does not exist.
+   */
+  auto read_file(std::string_view path)
+      -> std::optional<std::vector<std::uint8_t>>;
 };
 
 struct __attribute__((packed)) dir_ent {

@@ -90,19 +90,39 @@ int tfs_fuse_readdir(const char *path, void *dir_buf, fuse_fill_dir_t filler,
 }
 
 int tfs_fuse_open(const char *path, struct fuse_file_info *fi) {
-  UNUSED(path);
-  UNUSED(fi);
-  return -ENOENT;
+  auto instance = get_instance();
+  auto entry = instance.get_dir_ent_for_path(path);
+  if (!entry.has_value()) {
+    return -ENOENT;
+  }
+  if ((fi->flags & O_ACCMODE) != O_RDONLY) {
+    return -EACCES;
+  }
+  return 0;
 }
 
 int tfs_fuse_read(const char *path, char *buf, size_t size, off_t off,
                   struct fuse_file_info *fi) {
-  UNUSED(path);
-  UNUSED(buf);
-  UNUSED(size);
-  UNUSED(off);
   UNUSED(fi);
-  return -ENOENT;
+
+  auto instance = get_instance();
+  auto contents = instance.read_file(path);
+
+  if (!contents.has_value()) {
+    return -ENOENT;
+  }
+
+  if (static_cast<size_t>(off) >= contents->size()) {
+    return 0;
+  }
+
+  if (off + size > contents->size()) {
+    size = contents->size() - off;
+  }
+
+  std::copy_n(contents->begin(), size, buf);
+
+  return size;
 }
 
 int tfs_fuse_write(const char *path, const char *buf, size_t size, off_t off,
