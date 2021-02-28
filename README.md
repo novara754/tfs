@@ -4,6 +4,31 @@ TFS is a small and simple filesystem designed by me for self-educational
 purposes. This project implements the filesystem in userspace
 using [libfuse](https://github.com/libfuse/libfuse).
 
+## Building & running
+
+**Requirements:**
+ - [Python3](https://www.python.org/download/releases/3.0/)
+ - [GNU Make](https://www.gnu.org/software/make/)
+ - [g++](https://gcc.gnu.org/) with C++ 2a support
+ - [libfuse3](https://github.com/libfuse/libfuse)
+
+Compile the filesystem driver simply using `make all`, then
+it can be executed using `./tfs <tfs-img> <mount-point> [options]`.
+
+- `<tfs-img>` is a binary file containing a TFS formatted filesystem, you 
+can generate one using the `make-img.py` script in the `scripts` folder.
+- `<mount-point>` is where you want to mount the new filesystem.
+- `[options]` is an optional list of FUSE options. 
+
+To quickly get started run the following commands:
+```
+$ make all
+$ ./scripts/make-img.py
+$ ./tfs ./test/test.img /tmp/tfs-mount
+```
+
+A sample filesystem will be mounted at `/tmp/tfs-mount`. 
+
 ## Filesystem Design
 
 ### Overview
