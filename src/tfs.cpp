@@ -3,6 +3,15 @@
 
 namespace tfs {
 
+auto tfs_instance::get_block_offset(std::size_t idx) -> std::size_t {
+  return idx * BLOCK_SIZE;
+}
+
+auto tfs_instance::get_data_block_offset(std::size_t idx) -> std::size_t {
+  return (this->reserved_blocks + 1) * BLOCK_SIZE + BLOCK_USAGE_BITMAP_SIZE +
+         idx * BLOCK_SIZE;
+}
+
 auto dir_ent::clean_name() const -> std::string {
   std::string clean = reinterpret_cast<const char *>(this->data.name);
   clean[0] &= 0x7F;
@@ -37,16 +46,6 @@ auto dir_ent::get_type() const -> dir_ent::type {
     return dir_ent::type::EMPTY;
   }
   return dir_ent::type::USED;
-}
-
-auto get_block_offset(std::size_t idx) -> std::size_t {
-  return idx * BLOCK_SIZE;
-}
-
-auto get_data_block_offset(const tfs_instance &instance, std::size_t idx)
-    -> std::size_t {
-  return (instance.reserved_blocks + 1) * BLOCK_SIZE + BLOCK_USAGE_BITMAP_SIZE +
-         idx * BLOCK_SIZE;
 }
 
 } // namespace tfs

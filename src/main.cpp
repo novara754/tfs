@@ -48,7 +48,7 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
 
   auto instance = get_instance();
 
-  auto disk_offset = tfs::get_data_block_offset(instance, 0);
+  auto disk_offset = instance.get_data_block_offset(0);
   auto segments = util::split_by(path, '/');
   for (std::size_t i = 0; i < segments.size() - 1; i++) {
     const auto &segment = segments[i];
@@ -65,7 +65,7 @@ int tfs_fuse_getattr(const char *path, struct stat *st,
       return -ENOENT;
     }
 
-    disk_offset = tfs::get_data_block_offset(instance, entry->data.start_block);
+    disk_offset = instance.get_data_block_offset(entry->data.start_block);
   }
 
   // `disk_offset` is now set to the location of the parent directory
@@ -100,8 +100,7 @@ int tfs_fuse_readdir(const char *path, void *dir_buf, fuse_fill_dir_t filler,
 
   if (strcmp(path, "/") == 0) {
     std::uint8_t buf[tfs::BLOCK_SIZE];
-    read_at(source_fd, tfs::get_data_block_offset(instance, 0), buf,
-            tfs::BLOCK_SIZE);
+    read_at(source_fd, instance.get_data_block_offset(0), buf, tfs::BLOCK_SIZE);
 
     filler(dir_buf, "..", NULL, 0, static_cast<fuse_fill_dir_flags>(0));
 

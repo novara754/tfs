@@ -14,6 +14,18 @@ constexpr std::size_t BLOCK_USAGE_BITMAP_SIZE = BLOCK_SIZE * 2;
 
 struct tfs_instance {
   std::uint8_t reserved_blocks;
+
+  /**
+   * Calculate the byte offset for a given block index.
+   */
+  auto get_block_offset(std::size_t idx) -> std::size_t;
+
+  /**
+   * Calculate the byte offset for a given data block index
+   * while respecting the number of configured reserved blocks
+   * at the start.
+   */
+  auto get_data_block_offset(std::size_t idx) -> std::size_t;
 };
 
 struct __attribute__((packed)) dir_ent {
@@ -59,19 +71,6 @@ struct __attribute__((packed)) dir_ent {
    */
   auto get_type() const -> type;
 };
-
-/**
- * Calculate the byte offset for a given block index.
- */
-auto get_block_offset(std::size_t idx) -> std::size_t;
-
-/**
- * Calculate the byte offset for a given data block index
- * while respecting the number of configured reserved blocks
- * at the start.
- */
-auto get_data_block_offset(const tfs_instance &instance, std::size_t idx)
-    -> std::size_t;
 
 /**
  * Find a file or directory entry in a directory block by its name.
