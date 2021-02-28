@@ -1,15 +1,8 @@
 #include "tfs.h"
 #include "util.h"
-#include <errno.h>
-#include <fcntl.h>
 #include <fuse.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
 #include <iostream>
+#include <unistd.h>
 
 #define UNUSED(x) ((void)(x))
 
